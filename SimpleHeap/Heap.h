@@ -78,6 +78,9 @@ public:
 	// pPointerToAlign in order to align it to uAlignment
 	static u32 CalculateAlignmentDelta( void* pPointerToAlign, u32 uAlignment );
 
+	//Check if the system is little endian or big endian for consistency checks.
+	static bool IsSystemLittleEndian();
+
 private:
 	//Static variables
 	static const u32	sm_kuDefaultMaxAllocs = 32;				//The default maximum number of allocations a memory block will support, override on Initialise() if needed.
@@ -127,8 +130,15 @@ private:
 	u32* BestFitBlock		( u32 uNumBytes );
 	u32* WorstFitBlock		( u32 uNumBytes );
 
-	//Debug checks
+	//Debug checks - Here we assume pHeadLocation is a header guard.
+
+	//Check the byte sequence at the given pointer.
 	bool WasMemoryUnderrun	( u8* pHeadLocation );
+
+	//Problem with this method is finding the end of the allocation since no data tracks the actual length.
+	//All that can be done is check every byte in the block for the pattern (reverse)
+	//N.B. There is an edge case that we don't know if this footer runs over between two blocks.
+	//N.N.B Edge case offset alignment within a block.
 	bool WasMemoryOverrun	( u8* pHeadLocation, u32 uNumberOfBlocks );
 
 };

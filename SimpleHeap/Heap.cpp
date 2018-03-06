@@ -55,7 +55,8 @@ void CHeap::Initialise( u8* pRawMemory, u32 uMemorySizeInBytes, u32 iMaxAllocs, 
 	//If the memory size a power of two GTE CHEAP_PLATFORM_MIN_ALIGN and is GT the reserved memory size.
 	if ( IS_POWER_OF_TWO( uMemorySizeInBytes ) 
 		&& uMemorySizeInBytes >= CHEAP_PLATFORM_MIN_ALIGN 
-		&& uMemorySizeInBytes > ( iMaxAllocs * sizeof(u32*) ) )
+		&& uMemorySizeInBytes > ( iMaxAllocs * sizeof(u32*) ) 
+		&& CalculateAlignmentDelta(pRawMemory, CHEAP_PLATFORM_MIN_ALIGN) == 0 )
 	{
 		//Set members
 		m_uMaxAllocs						= iMaxAllocs;
@@ -102,13 +103,13 @@ void CHeap::Shutdown( void )
 //////////////////////////////////////////////////////////////////////////
 void* CHeap::Allocate( u32 uNumBytes )
 {		
-	void* pRtnAddress = nullptr;
+	void* puRtnAddress = nullptr;
 
 	if ( GetLastError() != EHeapError_NotInitialised )
 	{
-		pRtnAddress = AllocateAligned( uNumBytes, CHEAP_PLATFORM_MIN_ALIGN );
+		puRtnAddress = AllocateAligned( uNumBytes, CHEAP_PLATFORM_MIN_ALIGN );
 	}
-	return pRtnAddress;
+	return puRtnAddress;
 }
 
 
@@ -122,7 +123,7 @@ void* CHeap::Allocate( u32 uNumBytes )
 //////////////////////////////////////////////////////////////////////////
 void* CHeap::AllocateAligned( u32 uNumBytes, u32 uAlignment )
 {
-	u32* pRtnAddress = nullptr;
+	u32* puRtnAddress = nullptr;
 	EHeapError eErrorValue = EHeapError_Ok;
 
 	//N.B. 0 is also a power of two. This should return a valid pointer.
@@ -141,10 +142,10 @@ void* CHeap::AllocateAligned( u32 uNumBytes, u32 uAlignment )
 		u32 uFullSize = uNumBytes + ( sm_kuConsistencyBlockSize * sm_kuNumberOfHeaderSequences );
 
 		//Get a free block that fits full size.
-		u32* pFreeBlock = GetFreeBlockLocation( uFullSize );
+		u32* puFreeBlock = GetFreeBlockLocation( uFullSize );
 
 		//Only allocate if the requested memory is servicable.
-		if ( uFullSize <= m_uAllocatableMemorySizeInBytes && pFreeBlock != nullptr )
+		if ( uFullSize <= m_uAllocatableMemorySizeInBytes && puFreeBlock != nullptr )
 		{
 			//If a free block is available that fits size & m_uAllocCount < max
 			if ( m_uAllocCount < m_uMaxAllocs )
@@ -152,14 +153,14 @@ void* CHeap::AllocateAligned( u32 uNumBytes, u32 uAlignment )
 				//Get the corresponding block head location from the array value returned.
 
 				//Set header and footer block contents
-				u32* pWriting4Byte = pFreeBlock;
-				for ( u8 iLoop = 0; iLoop < sm_kuNumberOfHeaderSequences; ++iLoop ) 
+				u32* pWriting4Byte = puFreeBlock;
+				for ( u8 uLoop = 0; uLoop < sm_kuNumberOfHeaderSequences; ++uLoop ) 
 				{
 					*pWriting4Byte = sm_kuConsistencyValue;
 					pWriting4Byte++;
 				}
-				pWriting4Byte = ( u32* ) ( ( (u32)pFreeBlock) + uFullSize );
-				for ( u8 iLoop = 0; iLoop < sm_kuNumberOfHeaderSequences; ++iLoop )
+				pWriting4Byte = ( u32* ) ( ( (u32)puFreeBlock) + uFullSize );
+				for ( u8 uLoop = 0; uLoop < sm_kuNumberOfHeaderSequences; ++uLoop )
 				{
 					pWriting4Byte--;
 					*pWriting4Byte = sm_kuConsistencyValue;
@@ -170,7 +171,7 @@ void* CHeap::AllocateAligned( u32 uNumBytes, u32 uAlignment )
 
 				//Set pRtnAddress to the free block location + uNumberOfHeaderSequences
 				//pointer type addition multiplies the addition u8 by the size of pointer.
-				pRtnAddress = pFreeBlock + sm_kuNumberOfHeaderSequences;
+				puRtnAddress = puFreeBlock + sm_kuNumberOfHeaderSequences;
 			}
 			else 
 			{
@@ -191,7 +192,7 @@ void* CHeap::AllocateAligned( u32 uNumBytes, u32 uAlignment )
 	}
 
 	m_eLastError = eErrorValue;
-	return pRtnAddress;
+	return puRtnAddress;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -212,18 +213,18 @@ void CHeap::Deallocate( void* pMemory )
 
 	//Get the real head location (pMemory - header), TODO - NOT u32 type safe!
 	u32 uHeadLocation = ( (u32) pMemory ) - ( sm_kuNumberOfHeaderSequences * sizeof(u32) );
-	u8* pHeadLocation = reinterpret_cast< u8* >( uHeadLocation );
+	u8* puHeadLocation = reinterpret_cast< u8* >( uHeadLocation );
 
 	u32 uConsectutiveBlocks = 0;
 	//Check the array for blocks that match head location value
-	for ( unsigned int iLoop = 0; iLoop < m_uMaxAllocs; ++iLoop ) 
+	for ( unsigned int uLoop = 0; uLoop < m_uMaxAllocs; ++uLoop ) 
 	{
-		if ( m_pAllocArray[iLoop] == uHeadLocation )
+		if ( m_pAllocArray[uLoop] == uHeadLocation )
 		{
-			m_pAllocArray[iLoop] = NULL;
+			m_pAllocArray[uLoop] = NULL;
 			uConsectutiveBlocks++;
 		}
-		else if ( m_pAllocArray[iLoop] != uHeadLocation && uConsectutiveBlocks > 0 )
+		else if ( m_pAllocArray[uLoop] != uHeadLocation && uConsectutiveBlocks > 0 )
 		{
 			break;
 		}
@@ -233,26 +234,26 @@ void CHeap::Deallocate( void* pMemory )
 	if ( uConsectutiveBlocks == 0 )
 	{
 		//Set heap error.
-		eErrorValue = EHeapError_Dealloc_AlreadyDeallocated;
+		m_eLastError = EHeapError_Dealloc_AlreadyDeallocated;
 	}
 	else
 	{
 
 #ifdef _DEBUG
 		//overrun/underrun checks
-		if ( WasMemoryOverrun( pHeadLocation, uConsectutiveBlocks ) )
+		if ( WasMemoryOverrun( puHeadLocation, uConsectutiveBlocks ) )
 		{
 			//Set heap error.
 			eErrorValue = EHeapError_Dealloc_OverwriteOverrun;
 		}
-		else if ( WasMemoryUnderrun( pHeadLocation ) )
+		else if ( WasMemoryUnderrun( puHeadLocation ) )
 		{
 			//Set heap error.
 			eErrorValue = EHeapError_Dealloc_OverwriteUnderrun;
 		}
 
 		//Clear the allocated memory with std::fill.
-		std::fill( pHeadLocation, pHeadLocation + (uConsectutiveBlocks * m_uBlockSizeInBytes), NULL );
+		std::fill( puHeadLocation, puHeadLocation + (uConsectutiveBlocks * m_uBlockSizeInBytes), NULL );
 #endif
 
 		//decrement alloc count.
@@ -330,16 +331,23 @@ u32 CHeap::CalculateAlignmentDelta( void* pPointerToAlign, u32 uAlignment )
 	return( uAligned - uAddressToAlign );
 }
 
+bool CHeap::IsSystemLittleEndian()
+{
+	short int iNumber = 0x1;
+	char* pcNumPtr = ( char* ) &iNumber;
+	return ( pcNumPtr[0] == 1 );
+}
+
 u32* CHeap::GetFreeBlockLocation( u32 uNumBytes )
 {
-	u32* pRtnAddress = nullptr;
+	u32* puRtnAddress = nullptr;
 
 	switch ( m_eAllocPolicy )
 	{
 		//FIRSTAVAIL - get the first encountered fitting block.
 		case FirstAvail:
 		{
-			pRtnAddress = FirstAvailBlock( uNumBytes );
+			puRtnAddress = FirstAvailBlock( uNumBytes );
 			break;
 		}
 		//BESTFIT - Try to allocate to the smallest available fitting block.
@@ -358,18 +366,18 @@ u32* CHeap::GetFreeBlockLocation( u32 uNumBytes )
 
 	//pRtnAddress is only null if no consecutive subset of 'free' blocks could be allocated.
 	//Set error.
-	if ( pRtnAddress == nullptr )
+	if ( puRtnAddress == nullptr )
 	{
 		m_eLastError = EHeapError_Alloc_NoLargeEnoughBlocks;
 	}
 
 	//Should no free block be available, return nullptr.
-	return pRtnAddress;
+	return puRtnAddress;
 }
 
-u32 CHeap::GetArrayIndexFromArrayPtr( u32* pArrayPtr )
+u32 CHeap::GetArrayIndexFromArrayPtr( u32* puArrayPtr )
 {
-	return ( pArrayPtr - m_pAllocArray );
+	return ( puArrayPtr - m_pAllocArray );
 }
 
 u32* CHeap::GetBlockHeadFromArray(u32 * pArrayPtr)
@@ -382,9 +390,9 @@ u32* CHeap::GetBlockHeadFromArray(u32 * pArrayPtr)
 u32 CHeap::GetNumberOfOccupiedBlocks()
 {
 	u32 uReturnValue = 0;
-	for (unsigned int iLoop = 0; iLoop < m_uMaxAllocs; ++iLoop)
+	for (unsigned int uLoop = 0; uLoop < m_uMaxAllocs; ++uLoop)
 	{
-		if ( m_pAllocArray[iLoop] != NULL )
+		if ( m_pAllocArray[uLoop] != NULL )
 		{
 			uReturnValue++;
 		}
@@ -395,32 +403,32 @@ u32 CHeap::GetNumberOfOccupiedBlocks()
 
 u32* CHeap::FirstAvailBlock( u32 uNumBytes )
 {
-	u32* pRtnAddress = nullptr;
+	u32* puRtnAddress = nullptr;
 
 	//The pointer that points to the first 'free' array entry.
-	u32* pFreeBlockHead = nullptr;
+	u32* puFreeBlockHead = nullptr;
 	u32 uConsectutiveFree = 0;
 	u32 uStartingIndex = 0;
 
 	//Iterate through the array.
-	for ( unsigned int iLoop = 0; iLoop < m_uMaxAllocs; ++iLoop )
+	for ( unsigned int uLoop = 0; uLoop < m_uMaxAllocs; ++uLoop )
 	{
 		//1) Iterate through blocks until the first 'free' block is encountered.
-		if ( pFreeBlockHead == nullptr && m_pAllocArray[iLoop] == NULL )
+		if ( puFreeBlockHead == nullptr && m_pAllocArray[uLoop] == NULL )
 		{
-			pFreeBlockHead = &( m_pAllocArray[iLoop] );
-			uStartingIndex = iLoop;
+			puFreeBlockHead = &( m_pAllocArray[uLoop] );
+			uStartingIndex = uLoop;
 			uConsectutiveFree++;
 		}
 		//2) Count consecutive 'free' blocks and compare to uNumBytes
-		else if ( pFreeBlockHead != nullptr && m_pAllocArray[iLoop] == NULL )
+		else if ( puFreeBlockHead != nullptr && m_pAllocArray[uLoop] == NULL )
 		{
 			uConsectutiveFree++;
 		}
 		//3) Should an 'occupied' block be encountered, restart from 1).
-		else if ( pFreeBlockHead != nullptr && m_pAllocArray[iLoop] != NULL )
+		else if ( puFreeBlockHead != nullptr && m_pAllocArray[uLoop] != NULL )
 		{
-			pFreeBlockHead = nullptr;
+			puFreeBlockHead = nullptr;
 			uStartingIndex = 0;
 			uConsectutiveFree = 0;
 		}
@@ -429,19 +437,19 @@ u32* CHeap::FirstAvailBlock( u32 uNumBytes )
 		if ( uNumBytes <= ( m_uBlockSizeInBytes * uConsectutiveFree ) )
 		{
 			//Get the actual block head location from the array.
-			pRtnAddress = GetBlockHeadFromArray(pFreeBlockHead);
+			puRtnAddress = GetBlockHeadFromArray(puFreeBlockHead);
 
 			//Set array data to pFreeBlockHead
-			for ( unsigned int iLoop2 = uStartingIndex; iLoop2 <= iLoop; ++iLoop2 )
+			for ( unsigned int uLoop2 = uStartingIndex; uLoop2 <= uLoop; ++uLoop2 )
 			{
-				m_pAllocArray[iLoop2] = ( u32 ) pRtnAddress;
+				m_pAllocArray[uLoop2] = ( u32 ) puRtnAddress;
 			}
 			break;
 		}
 	}
 
 	//Should no free block be available, return nullptr.
-	return pRtnAddress;
+	return puRtnAddress;
 }
 
 u32* CHeap::BestFitBlock( u32 uNumBytes )
@@ -454,12 +462,60 @@ u32* CHeap::WorstFitBlock( u32 uNumBytes )
 	return nullptr;
 }
 
-bool CHeap::WasMemoryUnderrun( u8 * pHeadLocation )
+bool CHeap::WasMemoryUnderrun( u8* pHeadLocation )
 {
-	return false;
+	u32 puHeadVal = 0;
+	bool bReturnValue = false;
+
+	//for each iteration of 0xFACCFACC guard (4207737548), check value.
+	for ( u32 uLoop = 0; uLoop < sm_kuNumberOfHeaderSequences; ++uLoop ) 
+	{
+		puHeadVal = *( (u32*) pHeadLocation + uLoop );
+		if ( puHeadVal != sm_kuConsistencyValue ) 
+		{
+			bReturnValue = true;
+		}
+	}
+
+	return bReturnValue;
 }
 
-bool CHeap::WasMemoryOverrun( u8 * pHeadLocation, u32 uNumberOfBlocks )
+bool CHeap::WasMemoryOverrun( u8* pHeadLocation, u32 uNumberOfBlocks )
 {
-	return false;
+	//Get the pointer to the head of the block after
+	u8* pEndByte = pHeadLocation + (m_uBlockSizeInBytes * ( uNumberOfBlocks ));
+	u8* pStartByte = 0;
+
+	//If the check limit is in the same block, set it to the theoretical footer limit
+	if ( ( pEndByte - pHeadLocation ) <= m_uBlockSizeInBytes )
+	{
+		pStartByte = pHeadLocation + ( sm_kuNumberOfHeaderSequences * sizeof( sm_kuConsistencyValue ) );
+	}
+	//Else check into the previous block aka at least one byte of the footer sequence must be in the last block.
+	else 
+	{
+		pStartByte = pEndByte - ( m_uBlockSizeInBytes + (( sizeof( sm_kuConsistencyValue ) * sm_kuNumberOfHeaderSequences) - 1));
+	}
+
+	//Get a byte array of the sequence to check against.
+	unsigned char bytes[sizeof(sm_kuConsistencyValue)];
+	std::copy( reinterpret_cast<const unsigned char*>( &sm_kuConsistencyValue ),
+		reinterpret_cast<const unsigned char*>( &sm_kuConsistencyValue ) + sizeof( sm_kuConsistencyValue ),
+		bytes );
+
+	//Iterate backwards byte by byte until the entire footer sequence is matched or reached the start of the block.
+	//N.B. If part of the sequence is matched at the start of the last block, continue iterating backwards until match or break.
+
+	u8* puIterator = pStartByte;
+	for ( u32 uLoop = 0; uLoop < sm_kuNumberOfHeaderSequences; ++uLoop ) 
+	{
+		if ( uLoop > 0 ) 
+		{
+			puIterator += sizeof( sm_kuConsistencyValue );
+		}
+		puIterator = std::search( puIterator, pEndByte, std::begin( bytes ), std::end( bytes ) );
+	}
+
+	//If the iterator reaches the end of the allocated memory, that means a match was not found (no footer sequence was encountered)
+	return ( puIterator == pEndByte );
 }

@@ -14,7 +14,7 @@
     <ProjectGuid>{87F072EA-7831-45F0-8857-27C8B7E5B66D}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>SimpleHeap</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.10586.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">

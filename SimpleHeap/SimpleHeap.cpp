@@ -32,20 +32,20 @@ int _tmain(int argc, char argv[])
 	
 	std::cout << "Error code: " << cTestHeap.GetLastError() << std::endl;
 
-	cTestHeap.Allocate( 1 );
+	/*cTestHeap.Allocate( 1 );
 
 	std::cout << "Error code: " << cTestHeap.GetLastError() << std::endl;
+*/
+//	__debugbreak();
 
-	//__debugbreak();
-
-	while ( cTestHeap.GetLastError() == 0)
+	/*while ( cTestHeap.GetLastError() == 0)
 	{
 		cTestHeap.Allocate( 128 );
 		std::cout << "Error code: " << cTestHeap.GetLastError() << std::endl;
-	}
-*/
-	
+	}*/
 
+//	__debugbreak();
+	
 
 	// test 1: EHeapError_NotInitialised
 	// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -214,7 +214,7 @@ int _tmain(int argc, char argv[])
 		GCASSERT( CHeap::EHeapError_Alloc_BadAlign == cTestHeap.GetLastError(), "failed test 6: EHeapError_Alloc_BadAlign" );
 		std::cout << "ok\n";
 	}
-
+/*
 	// test 6a: aligned alloc
 	// ^^^^^^^^^^^^^^^^^^^^^^
 	// Tests that a non CHEAP_PLATFORM_MIN_ALIGN alignment does not cause an error
@@ -263,7 +263,7 @@ int _tmain(int argc, char argv[])
 		
 		std::cout << "ok\n";
 	}
-
+*/
 	// test 7: EHeapError_Alloc_OutOfMemory / EHeapError_Alloc_NoLargeEnoughBlocks
 	// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 	// checks that the allocator returns the correct error code when unable to allocate
@@ -337,6 +337,7 @@ int _tmain(int argc, char argv[])
 	// clean up the heap memory	and exit
 	cTestHeap.Shutdown();
 	
+	system("pause");
 	return 0;
 }
 
